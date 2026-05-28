@@ -91,22 +91,68 @@ function buildGroupSection(group, results) {
   return lines.join('\n');
 }
 
-function buildMissingData(results) {
+function buildNewsSection(news) {
+  const sourceName = news?.source || '新闻源';
+  const sourceUrl = news?.sourceUrl || '#';
+
+  if (!news?.events?.length) {
+    const reason = news?.error ? `抓取失败：${news.error}` : '暂无可解析事件';
+    return [
+      '## 新闻与事件',
+      '',
+      `暂无可靠数据。${reason}。来源：[${sourceName}](${sourceUrl})`,
+    ].join('\n');
+  }
+
+  const lines = [
+    '## 新闻与事件',
+    '',
+    `来源：[${sourceName}](${sourceUrl})。以下为该源最新事件卡片，保留原始事件链接；仅作线索，不构成投资建议。`,
+    '',
+  ];
+
+  for (const event of news.events) {
+    const meta = [event.time, event.type, event.expectationScore ? `预期差 ${event.expectationScore}` : null]
+      .filter(Boolean)
+      .join(' | ');
+    const stocks = event.stocks?.length ? `关联股票：${event.stocks.join('、')}` : '关联股票：暂无可靠数据';
+    const concepts = event.concepts?.length ? `概念：${event.concepts.join('、')}` : '概念：暂无可靠数据';
+
+    lines.push(`- [${event.title}](${event.url})`);
+    if (meta) lines.push(`  ${meta}`);
+    lines.push(`  ${stocks}`);
+    lines.push(`  ${concepts}`);
+  }
+
+  return lines.join('\n');
+}
+
+function buildMissingData(results, news) {
   const failed = results.filter((item) => item.error);
-  if (!failed.length) {
+  if (!failed.length && news?.events?.length) {
     return '## 数据质量\n\n所有第一版行情项均返回了可解析数据。';
   }
 
-  return [
+  const lines = [
     '## 数据质量',
     '',
-    '以下项目暂无可靠数据，报告不对其做推断：',
-    '',
-    ...failed.map((item) => `- ${item.name} (${item.symbol})：${item.error}。来源：[${item.source}](${item.sourceUrl})`),
-  ].join('\n');
+  ];
+
+  if (failed.length) {
+    lines.push('以下行情项目暂无可靠数据，报告不对其做推断：');
+    lines.push('');
+    lines.push(...failed.map((item) => `- ${item.name} (${item.symbol})：${item.error}。来源：[${item.source}](${item.sourceUrl})`));
+  }
+
+  if (!news?.events?.length) {
+    if (failed.length) lines.push('');
+    lines.push(`- 新闻事件：${news?.error || '暂无可解析事件'}。来源：[${news?.source || '新闻源'}](${news?.sourceUrl || '#'})`);
+  }
+
+  return lines.join('\n');
 }
 
-export function buildMarkdownReport({ reportDate, results }) {
+export function buildMarkdownReport({ reportDate, results, news }) {
   const sections = [
     `# 美股收盘日报 ${reportDate}`,
     '',
@@ -116,9 +162,7 @@ export function buildMarkdownReport({ reportDate, results }) {
     '',
     ...MARKET_GROUPS.map((group) => buildGroupSection(group, results)),
     '',
-    '## 新闻与事件',
-    '',
-    '暂无可靠数据。第一版尚未接入新闻搜索、SEC/IR 与财报日历，避免用模型补写未验证事实。',
+    buildNewsSection(news),
     '',
     '## 明日观察',
     '',
@@ -126,16 +170,17 @@ export function buildMarkdownReport({ reportDate, results }) {
     '- 观察 VIX 与美债收益率是否继续影响成长股估值。',
     '- 对无可靠数据的项目保持空缺，不做推断。',
     '',
-    buildMissingData(results),
+    buildMissingData(results, news),
     '',
   ];
 
   return sections.join('\n');
 }
 
-export function buildBarkSummary({ reportDate, results, reportPath }) {
+export function buildBarkSummary({ reportDate, results, reportPath, news }) {
   const reliable = sortedReliable(results);
   const failedCount = results.filter((item) => item.error).length;
+  const newsCount = news?.events?.length || 0;
   const top = reliable.slice(0, 2).map((item) => `${item.name}${fmt(item.technical.changePct, '%')}`).join('，') || '暂无可靠数据';
   const bottom = reliable.slice(-2).reverse().map((item) => `${item.name}${fmt(item.technical.changePct, '%')}`).join('，') || '暂无可靠数据';
 
@@ -144,6 +189,7 @@ export function buildBarkSummary({ reportDate, results, reportPath }) {
     `状态：完成`,
     `领涨：${top}`,
     `承压：${bottom}`,
+    `新闻：${newsCount}条`,
     `缺失：${failedCount}项`,
     `报告：${reportPath}`,
   ].join('\n');

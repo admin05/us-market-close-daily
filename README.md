@@ -6,6 +6,7 @@
 - 计算日涨跌、近 5 日、近 1 月、MA20、MA50、RSI14 等基础指标。
 - 生成中文 Markdown 日报到 `reports/YYYYMMDD.md`。
 - 通过 Bark 推送简短运行摘要；`BARK` 缺失或推送失败不会导致主流程失败。
+- 从新闻雷达抓取最新事件卡片，保留事件链接、时间、类型、关联股票与概念。
 - 数据缺失时明确输出“暂无可靠数据”，不使用 LLM 编造新闻或结论。
 
 旧项目参考素材仍保留在 `resources/`，用于后续扩展数据源、新闻、SEC/IR 和报告模板。
@@ -43,6 +44,8 @@ npm start
 - `REPORT_DATE`：可选，覆盖报告日期，格式 `YYYY-MM-DD`。
 - `HTTP_TIMEOUT_MS`：可选，行情请求超时时间。
 - `REPORTS_DIR`：可选，日报输出目录，默认 `reports`。
+- `NEWS_SOURCE_URL`：可选，新闻雷达事件源，默认 `https://stocks.matraceai.com/`；如只想看海外事件，可设为 `https://stocks.matraceai.com/?type=overseas`。
+- `NEWS_LIMIT`：可选，日报中展示的新闻事件数量，默认 8。
 
 `reports/*.md` 默认不提交到 Git，避免把每天生成的日报混入源码历史。
 
@@ -92,11 +95,12 @@ resources/arcadia-bark-notify.js
 2. 十一大板块 ETF：XLK、XLC、XLY、XLF、XLI、XLV、XLP、XLE、XLU、XLB、XLRE。
 3. 主题 ETF 和重点股 watchlist：AI 硬件、软件、光通信、电力/数据中心相关标的。
 4. 宏观资产：美债收益率、DXY、Gold、WTI、Brent、BTC、ETH。
-5. 中文 Markdown 日报模板和 Bark 摘要推送。
+5. 新闻雷达最新事件卡片：标题、时间、类型、预期差、关联股票、概念和原始链接。
+6. 中文 Markdown 日报模板和 Bark 摘要推送。
 
 暂未覆盖：
 
-- 新闻来源和引用：Reuters/CNBC/MarketWatch/Yahoo Finance/Nasdaq/公司 IR/SEC。
+- 美股原生新闻来源和引用：Reuters/CNBC/MarketWatch/Yahoo Finance/Nasdaq/公司 IR/SEC。
 - FedWatch 概率和年内降息次数。
 - 均线参与度、NYSE/Nasdaq 涨跌家数、新高新低。
 - Put/Call、VVIX、MOVE、信用利差、ETF flows、期权异动。
@@ -120,6 +124,7 @@ src/
   notify.js
   sources/
     yahoo-finance.js
+    news-radar.js
   indicators/
     technical.js
   report/

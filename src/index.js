@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { loadConfig } from './config.js';
 import { listAllSymbols } from './watchlists.js';
 import { fetchYahooQuotes } from './sources/yahoo-finance.js';
+import { fetchNewsRadarEvents } from './sources/news-radar.js';
 import { buildBarkSummary, buildMarkdownReport } from './report/build-report.js';
 import { sendBark } from './notify.js';
 import { compactDate, todayInTimezone } from './utils/dates.js';
@@ -22,14 +23,21 @@ async function main() {
   const symbols = listAllSymbols();
 
   console.log(`[market-close] Fetching ${symbols.length} symbols for ${reportDate}...`);
-  const results = await fetchYahooQuotes(symbols, { timeoutMs: config.httpTimeoutMs });
+  const [results, news] = await Promise.all([
+    fetchYahooQuotes(symbols, { timeoutMs: config.httpTimeoutMs }),
+    fetchNewsRadarEvents({
+      sourceUrl: config.newsSourceUrl,
+      limit: config.newsLimit,
+      timeoutMs: config.httpTimeoutMs,
+    }),
+  ]);
 
   await mkdir(config.reportsDir, { recursive: true });
-  const markdown = buildMarkdownReport({ reportDate, results });
+  const markdown = buildMarkdownReport({ reportDate, results, news });
   const reportPath = join(config.reportsDir, `${compactDate(reportDate)}.md`);
   await writeFile(reportPath, markdown, 'utf8');
 
-  const summary = buildBarkSummary({ reportDate, results, reportPath });
+  const summary = buildBarkSummary({ reportDate, results, reportPath, news });
   console.log(`[market-close] Report saved: ${reportPath}`);
   console.log(summary);
 

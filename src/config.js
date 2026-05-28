@@ -20,6 +20,8 @@ export function loadConfig() {
     reportDate: normalizeDate(process.env.REPORT_DATE),
     reportsDir: resolve(process.env.REPORTS_DIR || 'reports'),
     httpTimeoutMs: readNumberEnv('HTTP_TIMEOUT_MS', 15000),
+    newsSourceUrl: process.env.NEWS_SOURCE_URL || 'https://stocks.matraceai.com/',
+    newsLimit: readNumberEnv('NEWS_LIMIT', 8),
     bark: process.env.BARK || '',
   };
 }
