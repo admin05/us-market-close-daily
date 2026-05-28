@@ -24,6 +24,200 @@ function sortedReliable(items) {
     .sort((a, b) => b.technical.changePct - a.technical.changePct);
 }
 
+function findBySymbol(results, symbol) {
+  return results.find((item) => item.symbol === symbol);
+}
+
+function countAbove(items, field) {
+  const valid = items.filter((item) => item.technical?.[field] !== null && item.technical?.[field] !== undefined);
+  if (!valid.length) return null;
+  return {
+    count: valid.filter((item) => item.technical[field]).length,
+    total: valid.length,
+  };
+}
+
+function ratioText(ratio) {
+  if (!ratio) return '暂无可靠数据';
+  return `${ratio.count}/${ratio.total}`;
+}
+
+function classifyRisk(results) {
+  const spy = findBySymbol(results, 'SPY');
+  const qqq = findBySymbol(results, 'QQQ');
+  const iwm = findBySymbol(results, 'IWM');
+  const vix = findBySymbol(results, '^VIX');
+  const tnx = findBySymbol(results, '^TNX');
+  const hyg = findBySymbol(results, 'HYG');
+  const lqd = findBySymbol(results, 'LQD');
+
+  let score = 0;
+  const signals = [];
+
+  if (spy?.technical?.aboveMa20) {
+    score += 1;
+    signals.push('SPY站上MA20');
+  } else if (spy?.technical) {
+    score -= 1;
+    signals.push('SPY跌破MA20');
+  }
+
+  if (qqq?.technical?.aboveMa20) {
+    score += 1;
+    signals.push('QQQ站上MA20');
+  } else if (qqq?.technical) {
+    score -= 1;
+    signals.push('QQQ跌破MA20');
+  }
+
+  if (iwm?.technical?.changePct > spy?.technical?.changePct) {
+    score += 1;
+    signals.push('小盘相对强于SPY');
+  } else if (iwm?.technical && spy?.technical) {
+    score -= 1;
+    signals.push('小盘相对弱于SPY');
+  }
+
+  if (vix?.technical?.changePct > 3) {
+    score -= 1;
+    signals.push('VIX明显上行');
+  } else if (vix?.technical?.changePct < -3) {
+    score += 1;
+    signals.push('VIX明显回落');
+  } else if (vix?.technical) {
+    signals.push('VIX变化温和');
+  }
+
+  if (tnx?.technical?.changePct > 1) {
+    score -= 1;
+    signals.push('10年美债收益率上行');
+  } else if (tnx?.technical?.changePct < -1) {
+    score += 1;
+    signals.push('10年美债收益率回落');
+  } else if (tnx?.technical) {
+    signals.push('10年美债收益率变化温和');
+  }
+
+  if (hyg?.technical && lqd?.technical) {
+    const creditRiskAppetite = hyg.technical.changePct - lqd.technical.changePct;
+    if (creditRiskAppetite > 0.2) {
+      score += 1;
+      signals.push('高收益债相对投资级债走强');
+    } else if (creditRiskAppetite < -0.2) {
+      score -= 1;
+      signals.push('高收益债相对投资级债走弱');
+    } else {
+      signals.push('信用代理变化温和');
+    }
+  } else {
+    signals.push('信用代理暂无可靠数据');
+  }
+
+  if (score >= 2) return { label: '偏风险偏好', score, signals };
+  if (score <= -2) return { label: '偏防御', score, signals };
+  return { label: '中性震荡', score, signals };
+}
+
+function buildMarketInternals(results) {
+  const all = results.filter((item) => item.technical);
+  const gainers = all.filter((item) => item.technical.changePct > 0).length;
+  const losers = all.filter((item) => item.technical.changePct < 0).length;
+  const aboveMa20 = countAbove(all, 'aboveMa20');
+  const aboveMa50 = countAbove(all, 'aboveMa50');
+  const risk = classifyRisk(results);
+
+  return [
+    '## 风险状态与市场宽度',
+    '',
+    `- 风险状态：${risk.label}（代理评分 ${risk.score}）。`,
+    `- 信号依据：${risk.signals.join('；')}。`,
+    `- Watchlist 涨跌家数：上涨 ${gainers}，下跌 ${losers}。`,
+    `- MA20 参与度：${ratioText(aboveMa20)}；MA50 参与度：${ratioText(aboveMa50)}。`,
+    '- NYSE/Nasdaq 全市场涨跌家数、新高新低、信用利差仍待接入权威数据源。',
+  ].join('\n');
+}
+
+function buildSectorRotation(results) {
+  const sectors = sortedReliable(results.filter((item) => item.groupId === 'sectors'));
+  if (!sectors.length) {
+    return '## 板块轮动\n\n暂无可靠数据。';
+  }
+
+  const top = sectors.slice(0, 3);
+  const bottom = sectors.slice(-3).reverse();
+  const defensive = new Set(['XLP', 'XLU', 'XLV']);
+  const cyclical = new Set(['XLY', 'XLF', 'XLI', 'XLE', 'XLB']);
+  const growth = new Set(['XLK', 'XLC']);
+
+  const leaderTypes = top.map((item) => {
+    if (defensive.has(item.symbol)) return '防御';
+    if (cyclical.has(item.symbol)) return '周期';
+    if (growth.has(item.symbol)) return '成长';
+    return '其他';
+  });
+  const styleVotes = leaderTypes.reduce((acc, type) => {
+    acc.set(type, (acc.get(type) || 0) + 1);
+    return acc;
+  }, new Map());
+  const [styleLeader, styleCount] = [...styleVotes.entries()].sort((a, b) => b[1] - a[1])[0] || ['其他', 0];
+  const style = styleCount >= 2 ? `${styleLeader}主导` : `${leaderTypes[0]}领涨、风格分散`;
+
+  return [
+    '## 板块轮动',
+    '',
+    `- 轮动风格：${style}。`,
+    `- 领涨板块：${top.map((item) => `${item.name} ${fmt(item.technical.changePct, '%')}`).join('；')}。`,
+    `- 承压板块：${bottom.map((item) => `${item.name} ${fmt(item.technical.changePct, '%')}`).join('；')}。`,
+    `- 近5日强势：${sectors.slice().sort((a, b) => b.technical.fiveDayPct - a.technical.fiveDayPct).slice(0, 3).map((item) => `${item.name} ${fmt(item.technical.fiveDayPct, '%')}`).join('；')}。`,
+  ].join('\n');
+}
+
+function buildEventThemes(news) {
+  const events = news?.events || [];
+  if (!events.length) return '## 事件主题\n\n暂无可靠数据。';
+
+  const conceptCounts = new Map();
+  const stockCounts = new Map();
+  for (const event of events) {
+    for (const concept of event.concepts || []) {
+      conceptCounts.set(concept, (conceptCounts.get(concept) || 0) + 1);
+    }
+    for (const stock of event.stocks || []) {
+      stockCounts.set(stock, (stockCounts.get(stock) || 0) + 1);
+    }
+  }
+
+  const topConcepts = [...conceptCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
+  const topStocks = [...stockCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
+
+  return [
+    '## 事件主题',
+    '',
+    `- 高频概念：${topConcepts.length ? topConcepts.map(([name, count]) => `${name}(${count})`).join('、') : '暂无可靠数据'}。`,
+    `- 高频关联股票：${topStocks.length ? topStocks.map(([name, count]) => `${name}(${count})`).join('、') : '暂无可靠数据'}。`,
+    '- 当前新闻源偏 A 股事件驱动；美股原生新闻、SEC/IR、财报日历仍需补充数据源。',
+  ].join('\n');
+}
+
+function buildWatchPlan(results, news) {
+  const risk = classifyRisk(results);
+  const semis = findBySymbol(results, 'SMH');
+  const qqq = findBySymbol(results, 'QQQ');
+  const tnx = findBySymbol(results, '^TNX');
+  const vix = findBySymbol(results, '^VIX');
+  const newsHeadlines = (news?.events || []).slice(0, 3).map((event) => event.title);
+
+  return [
+    '## 明日观察',
+    '',
+    `- 风险状态延续性：当前为${risk.label}，重点观察 SPY/QQQ 是否继续守住 MA20。`,
+    `- 成长主线：QQQ ${fmt(qqq?.technical?.changePct, '%')}，半导体 SMH ${fmt(semis?.technical?.changePct, '%')}，观察两者是否重新同向。`,
+    `- 宏观约束：10年美债收益率 ${fmt(tnx?.technical?.changePct, '%')}，VIX ${fmt(vix?.technical?.changePct, '%')}，若同步上行需降低追涨权重。`,
+    `- 事件线索：${newsHeadlines.length ? newsHeadlines.join('；') : '暂无可靠数据'}。`,
+    '- 对无可靠数据的项目保持空缺，不做推断。',
+  ].join('\n');
+}
+
 function tableRows(items) {
   return items
     .map((item) => {
@@ -160,15 +354,17 @@ export function buildMarkdownReport({ reportDate, results, news }) {
     '',
     buildOverview(results),
     '',
+    buildMarketInternals(results),
+    '',
+    buildSectorRotation(results),
+    '',
     ...MARKET_GROUPS.map((group) => buildGroupSection(group, results)),
+    '',
+    buildEventThemes(news),
     '',
     buildNewsSection(news),
     '',
-    '## 明日观察',
-    '',
-    '- 观察主要指数是否与半导体、科技、通信服务方向一致。',
-    '- 观察 VIX 与美债收益率是否继续影响成长股估值。',
-    '- 对无可靠数据的项目保持空缺，不做推断。',
+    buildWatchPlan(results, news),
     '',
     buildMissingData(results, news),
     '',

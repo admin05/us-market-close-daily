@@ -96,7 +96,8 @@ resources/arcadia-bark-notify.js
 3. 主题 ETF 和重点股 watchlist：AI 硬件、软件、光通信、电力/数据中心相关标的。
 4. 宏观资产：美债收益率、DXY、Gold、WTI、Brent、BTC、ETH。
 5. 新闻雷达最新事件卡片：标题、时间、类型、预期差、关联股票、概念和原始链接。
-6. 中文 Markdown 日报模板和 Bark 摘要推送。
+6. 风险状态、市场宽度代理、板块轮动、事件主题和明日观察清单。
+7. 中文 Markdown 日报模板和 Bark 摘要推送。
 
 暂未覆盖：
 
@@ -106,6 +107,21 @@ resources/arcadia-bark-notify.js
 - Put/Call、VVIX、MOVE、信用利差、ETF flows、期权异动。
 - 财报日历、SEC 文件和公司 IR 自动抽取。
 - 多来源冲突检测和权威优先级裁决。
+
+## 待补数据源
+
+为了达到“完整美股收盘日报”的最终形态，后续建议补充这些数据源：
+
+| 模块 | 推荐数据源 | 是否需要你提供 |
+|---|---|---|
+| 美股原生新闻 | Finnhub News、Alpha Vantage News Sentiment、NewsAPI、SerpAPI/Brave/Tavily 搜索 | 通常需要 API key |
+| SEC 文件 | SEC Company Facts / Submissions API | 不需要 key，但要加 User-Agent 联系信息 |
+| 财报日历 | Finnhub Earnings Calendar、Nasdaq earnings calendar、Alpha Vantage earnings | 通常需要 API key |
+| FedWatch | CME FedWatch 页面或第三方封装 | 可能不需要 key，但页面结构会变 |
+| 市场宽度 | Nasdaq/NYSE advance-decline、新高新低、StockCharts/TradingView 类数据 | 需要确认稳定来源 |
+| 波动与期权 | CBOE VIX/VVIX、Put/Call、期权异动 | 多数需要专业或半公开数据源 |
+| 信用与流动性 | FRED 信用利差、MOVE、HYG/LQD 代理 | FRED 可选 API key，ETF 代理无需 key |
+| ETF flows | ETF.com、VettaFi、Farside、发行商页面 | 需要确认可访问性和授权边界 |
 
 第二阶段再补：
 
