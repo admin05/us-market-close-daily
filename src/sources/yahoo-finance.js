@@ -74,10 +74,33 @@ export async function fetchYahooQuote(symbolMeta, { timeoutMs }) {
   }
 }
 
-export async function fetchYahooQuotes(symbols, options) {
-  const results = [];
-  for (const symbol of symbols) {
-    results.push(await fetchYahooQuote(symbol, options));
+export async function fetchYahooQuotes(symbols, options = {}) {
+  const concurrency = Math.max(1, Math.floor(options.concurrency || 6));
+  const results = new Array(symbols.length);
+  let nextIndex = 0;
+  let completed = 0;
+
+  async function worker() {
+    while (nextIndex < symbols.length) {
+      const currentIndex = nextIndex;
+      nextIndex += 1;
+      const symbol = symbols[currentIndex];
+      results[currentIndex] = await fetchYahooQuote(symbol, options);
+      completed += 1;
+
+      if (options.onProgress) {
+        options.onProgress({
+          completed,
+          total: symbols.length,
+          symbol: symbol.symbol,
+          ok: !results[currentIndex].error,
+          error: results[currentIndex].error,
+        });
+      }
+    }
   }
+
+  const workers = Array.from({ length: Math.min(concurrency, symbols.length) }, () => worker());
+  await Promise.all(workers);
   return results;
 }

@@ -24,7 +24,14 @@ async function main() {
 
   console.log(`[market-close] Fetching ${symbols.length} symbols for ${reportDate}...`);
   const [results, news] = await Promise.all([
-    fetchYahooQuotes(symbols, { timeoutMs: config.httpTimeoutMs }),
+    fetchYahooQuotes(symbols, {
+      timeoutMs: config.httpTimeoutMs,
+      concurrency: config.marketDataConcurrency,
+      onProgress: ({ completed, total, symbol, ok, error }) => {
+        const status = ok ? 'ok' : `missing: ${error}`;
+        console.log(`[market-close] Market data ${completed}/${total}: ${symbol} ${status}`);
+      },
+    }),
     fetchNewsRadarEvents({
       sourceUrl: config.newsSourceUrl,
       limit: config.newsLimit,
