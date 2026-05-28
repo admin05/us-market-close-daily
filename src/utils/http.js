@@ -6,8 +6,11 @@ export async function fetchJson(url, { timeoutMs = 15000, headers = {} } = {}) {
     const response = await fetch(url, {
       method: 'GET',
       headers: {
-        'user-agent': 'us-market-close-daily/0.1',
-        accept: 'application/json',
+        'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36',
+        accept: 'application/json,text/plain,*/*',
+        'accept-language': 'en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7',
+        'cache-control': 'no-cache',
+        pragma: 'no-cache',
         ...headers,
       },
       signal: controller.signal,

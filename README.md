@@ -46,6 +46,8 @@ npm start
 - `REPORTS_DIR`：可选，日报输出目录，默认 `reports`。
 - `NEWS_SOURCE_URL`：可选，新闻雷达事件源，默认 `https://stocks.matraceai.com/`；如只想看海外事件，可设为 `https://stocks.matraceai.com/?type=overseas`。
 - `NEWS_LIMIT`：可选，日报中展示的新闻事件数量，默认 8。
+- `FMP_API_KEY`：推荐配置。Arcadia 上 Yahoo Finance 可能返回 403/429，FMP 用作稳定行情源。
+- `FINNHUB_API_KEY`：可选配置。用于股票和 ETF 行情兜底，指数会尽量用 ETF 代理。
 
 `reports/*.md` 默认不提交到 Git，避免把每天生成的日报混入源码历史。
 
@@ -114,6 +116,7 @@ resources/arcadia-bark-notify.js
 
 | 模块 | 推荐数据源 | 是否需要你提供 |
 |---|---|---|
+| 行情主数据 | Financial Modeling Prep、Finnhub，Yahoo Finance 仅作免 key 尝试 | 建议提供 `FMP_API_KEY`，可选 `FINNHUB_API_KEY` |
 | 美股原生新闻 | Finnhub News、Alpha Vantage News Sentiment、NewsAPI、SerpAPI/Brave/Tavily 搜索 | 通常需要 API key |
 | SEC 文件 | SEC Company Facts / Submissions API | 不需要 key，但要加 User-Agent 联系信息 |
 | 财报日历 | Finnhub Earnings Calendar、Nasdaq earnings calendar、Alpha Vantage earnings | 通常需要 API key |

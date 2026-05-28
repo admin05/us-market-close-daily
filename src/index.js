@@ -3,7 +3,7 @@ import { join } from 'node:path';
 
 import { loadConfig } from './config.js';
 import { listAllSymbols } from './watchlists.js';
-import { fetchYahooQuotes } from './sources/yahoo-finance.js';
+import { fetchMarketQuotes } from './sources/market-data.js';
 import { fetchNewsRadarEvents } from './sources/news-radar.js';
 import { buildBarkSummary, buildMarkdownReport } from './report/build-report.js';
 import { sendBark } from './notify.js';
@@ -24,11 +24,15 @@ async function main() {
 
   console.log(`[market-close] Fetching ${symbols.length} symbols for ${reportDate}...`);
   const [results, news] = await Promise.all([
-    fetchYahooQuotes(symbols, {
+    fetchMarketQuotes(symbols, {
       timeoutMs: config.httpTimeoutMs,
       concurrency: config.marketDataConcurrency,
-      onProgress: ({ completed, total, symbol, ok, error }) => {
-        const status = ok ? 'ok' : `missing: ${error}`;
+      finnhubApiKey: config.finnhubApiKey,
+      fmpApiKey: config.fmpApiKey,
+      onProgress: ({ completed, total, symbol, ok, source, proxyNote, error }) => {
+        const via = source ? ` via ${source}` : '';
+        const proxy = proxyNote ? ` (${proxyNote})` : '';
+        const status = ok ? `ok${via}${proxy}` : `missing: ${error}`;
         console.log(`[market-close] Market data ${completed}/${total}: ${symbol} ${status}`);
       },
     }),

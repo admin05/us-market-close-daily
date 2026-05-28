@@ -231,7 +231,8 @@ function tableRows(items) {
         t.aboveMa50 === null ? 'MA50暂无可靠数据' : t.aboveMa50 ? '站上MA50' : '跌破MA50',
       ].join(' / ');
 
-      return `| ${item.name} | ${item.symbol} | ${fmtPlain(t.close)} | ${fmt(t.changePct, '%')} | ${fmt(t.fiveDayPct, '%')} | ${trend} / RSI ${fmtPlain(t.rsi14)} | [${item.source}](${item.sourceUrl}) |`;
+      const sourceLabel = item.proxyNote ? `${item.source}（${item.proxyNote}）` : item.source;
+      return `| ${item.name} | ${item.symbol} | ${fmtPlain(t.close)} | ${fmt(t.changePct, '%')} | ${fmt(t.fiveDayPct, '%')} | ${trend} / RSI ${fmtPlain(t.rsi14)} | [${sourceLabel}](${item.sourceUrl}) |`;
     })
     .join('\n');
 }
@@ -323,8 +324,12 @@ function buildNewsSection(news) {
 
 function buildMissingData(results, news) {
   const failed = results.filter((item) => item.error);
+  const proxied = results.filter((item) => item.proxyNote && !item.error);
   if (!failed.length && news?.events?.length) {
-    return '## 数据质量\n\n所有第一版行情项均返回了可解析数据。';
+    const proxyLine = proxied.length
+      ? `\n\n代理数据：${proxied.map((item) => `${item.name}(${item.proxyNote})`).join('；')}。`
+      : '';
+    return `## 数据质量\n\n所有第一版行情项均返回了可解析数据。${proxyLine}`;
   }
 
   const lines = [
@@ -341,6 +346,11 @@ function buildMissingData(results, news) {
   if (!news?.events?.length) {
     if (failed.length) lines.push('');
     lines.push(`- 新闻事件：${news?.error || '暂无可解析事件'}。来源：[${news?.source || '新闻源'}](${news?.sourceUrl || '#'})`);
+  }
+
+  if (proxied.length) {
+    if (failed.length || !news?.events?.length) lines.push('');
+    lines.push(`代理数据：${proxied.map((item) => `${item.name}(${item.proxyNote})`).join('；')}。`);
   }
 
   return lines.join('\n');
