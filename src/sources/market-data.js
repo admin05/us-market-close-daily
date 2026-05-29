@@ -1,5 +1,6 @@
 import { fetchFinnhubQuote } from './finnhub.js';
 import { fetchFmpQuote } from './fmp.js';
+import { fetchFredQuote } from './fred.js';
 import { fetchYahooQuote } from './yahoo-finance.js';
 
 const INDEX_PROXY_SYMBOLS = {
@@ -18,12 +19,16 @@ const FMP_DIRECT_PROXY_SYMBOLS = {
   XLY: { symbol: 'AMZN', note: '用AMZN代理可选消费板块' },
   XLF: { symbol: 'JPM', note: '用JPM代理金融板块' },
   XLI: { symbol: 'GE', note: '用GE代理工业板块' },
-  XLV: { symbol: 'LLY', note: '用LLY代理医疗保健板块' },
+  XLV: { symbol: '^GSPC', note: '用标普500指数代理医疗保健板块' },
   XLP: { symbol: 'WMT', note: '用WMT代理必需消费板块' },
   XLE: { symbol: 'XOM', note: '用XOM代理能源板块' },
-  XLU: { symbol: 'NEE', note: '用NEE代理公用事业板块' },
-  XLB: { symbol: 'LIN', note: '用LIN代理材料板块' },
-  XLRE: { symbol: 'PLD', note: '用PLD代理房地产板块' },
+  XLU: { symbol: '^GSPC', note: '用标普500指数代理公用事业板块' },
+  XLB: { symbol: '^GSPC', note: '用标普500指数代理材料板块' },
+  XLRE: { symbol: '^GSPC', note: '用标普500指数代理房地产板块' },
+  AVGO: { symbol: 'NVDA', note: '用NVDA代理博通' },
+  VRT: { symbol: 'NVDA', note: '用NVDA代理数据中心电力链' },
+  CEG: { symbol: '^GSPC', note: '用标普500指数代理电力股' },
+  'CL=F': { symbol: 'BZ=F', note: '用Brent原油代理WTI原油' },
   SMH: { symbol: 'NVDA', note: '用NVDA代理半导体主题' },
   SOXX: { symbol: 'NVDA', note: '用NVDA代理半导体主题' },
   TLT: { symbol: '^TYX', note: '用30年期美债收益率反向观察长债' },
@@ -64,6 +69,16 @@ function addError(symbolMeta, errors) {
 
 async function fetchWithFallback(symbolMeta, options) {
   const errors = [];
+
+  try {
+    return await fetchFredQuote(symbolMeta, {
+      timeoutMs: options.timeoutMs,
+    });
+  } catch (error) {
+    if (!String(error.message || '').includes('not supported')) {
+      errors.push(`FRED: ${error.message}`);
+    }
+  }
 
   if (options.fmpApiKey) {
     const proxyMeta = withFmpDirectProxy(symbolMeta);
