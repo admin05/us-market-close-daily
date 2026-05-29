@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { loadConfig } from './config.js';
 import { listAllSymbols } from './watchlists.js';
 import { fetchMarketQuotes } from './sources/market-data.js';
+import { fetchCompanyNews } from './sources/company-news.js';
 import { fetchNewsRadarEvents } from './sources/news-radar.js';
 import { buildBarkSummary, buildMarkdownReport } from './report/build-report.js';
 import { sendBark } from './notify.js';
@@ -37,8 +38,21 @@ async function main() {
       limit: config.newsLimit,
       timeoutMs: config.httpTimeoutMs,
     });
+  const companyNewsPromise = config.skipNews
+    ? Promise.resolve({
+      ok: false,
+      source: 'StockAnalysis Company News',
+      sourceUrl: 'https://stockanalysis.com/stocks/',
+      events: [],
+      error: 'SKIP_NEWS=1',
+    })
+    : fetchCompanyNews({
+      totalLimit: config.companyNewsLimit,
+      perSymbolLimit: config.companyNewsPerSymbol,
+      timeoutMs: config.httpTimeoutMs,
+    });
 
-  const [results, news] = await Promise.all([
+  const [results, news, companyNews] = await Promise.all([
     fetchMarketQuotes(symbols, {
       timeoutMs: config.httpTimeoutMs,
       concurrency: config.marketDataConcurrency,
@@ -53,6 +67,7 @@ async function main() {
       },
     }),
     newsPromise,
+    companyNewsPromise,
   ]);
 
   if (news.events?.length) {
@@ -60,13 +75,18 @@ async function main() {
   } else {
     console.log(`[market-close] News events missing: ${news.error || 'no events'}`);
   }
+  if (companyNews.events?.length) {
+    console.log(`[market-close] Company news ${companyNews.events.length}/${config.companyNewsLimit}: ${companyNews.source}`);
+  } else {
+    console.log(`[market-close] Company news missing: ${companyNews.error || 'no events'}`);
+  }
 
   await mkdir(config.reportsDir, { recursive: true });
-  const markdown = buildMarkdownReport({ reportDate, results, news });
+  const markdown = buildMarkdownReport({ reportDate, results, news, companyNews });
   const reportPath = join(config.reportsDir, `${compactDate(reportDate)}.md`);
   await writeFile(reportPath, markdown, 'utf8');
 
-  const summary = buildBarkSummary({ reportDate, results, reportPath, news });
+  const summary = buildBarkSummary({ reportDate, results, reportPath, news, companyNews });
   console.log(`[market-close] Report saved: ${reportPath}`);
   console.log(summary);
 

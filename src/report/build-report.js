@@ -327,11 +327,40 @@ function buildNewsSection(news) {
   return lines.join('\n');
 }
 
-function buildMissingData(results, news) {
+function buildCompanyNewsSection(companyNews) {
+  const sourceName = companyNews?.source || '公司新闻源';
+  const sourceUrl = companyNews?.sourceUrl || '#';
+
+  if (!companyNews?.events?.length) {
+    const reason = companyNews?.error ? `抓取失败：${companyNews.error}` : '暂无可解析公司新闻';
+    return [
+      '## 重点公司新闻',
+      '',
+      `暂无可靠数据。${reason}。来源：[${sourceName}](${sourceUrl})`,
+    ].join('\n');
+  }
+
+  const lines = [
+    '## 重点公司新闻',
+    '',
+    `来源：[${sourceName}](${sourceUrl})。覆盖重点股 Watchlist 的公司新闻标题，保留原始媒体链接；仅作事件线索。`,
+    '',
+  ];
+
+  for (const event of companyNews.events) {
+    const meta = [event.symbol, event.publisher, event.age].filter(Boolean).join(' | ');
+    lines.push(`- [${event.title}](${event.url})`);
+    if (meta) lines.push(`  ${meta}`);
+  }
+
+  return lines.join('\n');
+}
+
+function buildMissingData(results, news, companyNews) {
   const failed = results.filter((item) => item.error);
   const proxied = results.filter((item) => item.proxyNote && !item.error);
   const quoteOnly = results.filter((item) => item.quoteOnly && !item.error);
-  if (!failed.length && news?.events?.length) {
+  if (!failed.length && news?.events?.length && companyNews?.events?.length) {
     const proxyLine = proxied.length
       ? `\n\n代理数据：${proxied.map((item) => `${item.name}(${item.proxyNote})`).join('；')}。`
       : '';
@@ -357,6 +386,11 @@ function buildMissingData(results, news) {
     lines.push(`- 新闻事件：${news?.error || '暂无可解析事件'}。来源：[${news?.source || '新闻源'}](${news?.sourceUrl || '#'})`);
   }
 
+  if (!companyNews?.events?.length) {
+    if (failed.length || !news?.events?.length) lines.push('');
+    lines.push(`- 重点公司新闻：${companyNews?.error || '暂无可解析公司新闻'}。来源：[${companyNews?.source || '公司新闻源'}](${companyNews?.sourceUrl || '#'})`);
+  }
+
   if (proxied.length) {
     if (failed.length || !news?.events?.length) lines.push('');
     lines.push(`代理数据：${proxied.map((item) => `${item.name}(${item.proxyNote})`).join('；')}。`);
@@ -370,7 +404,7 @@ function buildMissingData(results, news) {
   return lines.join('\n');
 }
 
-export function buildMarkdownReport({ reportDate, results, news }) {
+export function buildMarkdownReport({ reportDate, results, news, companyNews }) {
   const sections = [
     `# 美股收盘日报 ${reportDate}`,
     '',
@@ -388,19 +422,22 @@ export function buildMarkdownReport({ reportDate, results, news }) {
     '',
     buildNewsSection(news),
     '',
+    buildCompanyNewsSection(companyNews),
+    '',
     buildWatchPlan(results, news),
     '',
-    buildMissingData(results, news),
+    buildMissingData(results, news, companyNews),
     '',
   ];
 
   return sections.join('\n');
 }
 
-export function buildBarkSummary({ reportDate, results, reportPath, news }) {
+export function buildBarkSummary({ reportDate, results, reportPath, news, companyNews }) {
   const reliable = sortedReliable(results);
   const failedCount = results.filter((item) => item.error).length;
   const newsCount = news?.events?.length || 0;
+  const companyNewsCount = companyNews?.events?.length || 0;
   const top = reliable.slice(0, 2).map((item) => `${item.name}${fmt(item.technical.changePct, '%')}`).join('，') || '暂无可靠数据';
   const bottom = reliable.slice(-2).reverse().map((item) => `${item.name}${fmt(item.technical.changePct, '%')}`).join('，') || '暂无可靠数据';
 
@@ -410,6 +447,7 @@ export function buildBarkSummary({ reportDate, results, reportPath, news }) {
     `领涨：${top}`,
     `承压：${bottom}`,
     `新闻：${newsCount}条`,
+    `公司新闻：${companyNewsCount}条`,
     `缺失：${failedCount}项`,
     `报告：${reportPath}`,
   ].join('\n');

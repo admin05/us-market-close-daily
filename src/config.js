@@ -27,6 +27,8 @@ export function loadConfig() {
     fmpApiKey: process.env.FMP_API_KEY || '',
     newsSourceUrl: process.env.NEWS_SOURCE_URL || 'https://stocks.matraceai.com/',
     newsLimit: readNumberEnv('NEWS_LIMIT', 8),
+    companyNewsLimit: readNumberEnv('COMPANY_NEWS_LIMIT', 12),
+    companyNewsPerSymbol: readNumberEnv('COMPANY_NEWS_PER_SYMBOL', 2),
     skipNews: process.env.SKIP_NEWS === '1',
     bark: process.env.BARK || '',
   };

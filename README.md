@@ -48,6 +48,8 @@ npm start
 - `DATA_DIR`：可选，行情缓存目录，默认 `data`。同一天重复运行会复用已成功抓到的行情，节省 API calls。
 - `NEWS_SOURCE_URL`：可选，新闻雷达事件源，默认 `https://stocks.matraceai.com/`；如只想看海外事件，可设为 `https://stocks.matraceai.com/?type=overseas`。
 - `NEWS_LIMIT`：可选，日报中展示的新闻事件数量，默认 8。
+- `COMPANY_NEWS_LIMIT`：可选，重点公司新闻总数，默认 12。
+- `COMPANY_NEWS_PER_SYMBOL`：可选，单个重点股最多新闻数，默认 2。
 - `FMP_API_KEY`：推荐配置。Arcadia 上 Yahoo Finance 可能返回 403/429，FMP 用作稳定行情源。
 - `FINNHUB_API_KEY`：可选配置。用于股票和 ETF 行情兜底，指数会尽量用 ETF 代理。
 
