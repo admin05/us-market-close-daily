@@ -4,6 +4,7 @@ import { dirname } from 'node:path';
 import { fetchFinnhubQuote } from './finnhub.js';
 import { fetchFmpQuote } from './fmp.js';
 import { fetchFredQuote } from './fred.js';
+import { fetchStockAnalysisQuote } from './stockanalysis.js';
 import { fetchYahooQuote } from './yahoo-finance.js';
 
 const INDEX_PROXY_SYMBOLS = {
@@ -123,6 +124,16 @@ function finalCacheKey(symbolMeta) {
   return `final:${symbolMeta.symbol}`;
 }
 
+function isRateLimitError(error) {
+  return /HTTP 429|Too Many Requests|Limit Reach/i.test(String(error?.message || error || ''));
+}
+
+function markUnavailable(options, source, error) {
+  if (isRateLimitError(error)) {
+    options.unavailableSources?.add(source);
+  }
+}
+
 async function fetchWithFallback(symbolMeta, options) {
   const errors = [];
   const persistentCache = options.persistentCache;
@@ -144,7 +155,7 @@ async function fetchWithFallback(symbolMeta, options) {
     }
   }
 
-  if (options.fmpApiKey) {
+  if (options.fmpApiKey && !options.unavailableSources?.has('fmp')) {
     const proxyMeta = withFmpDirectProxy(symbolMeta);
     if (proxyMeta) {
       try {
@@ -158,25 +169,29 @@ async function fetchWithFallback(symbolMeta, options) {
         );
         return cloneResultForSymbol(proxyResult, symbolMeta, { proxyNote: proxyMeta.proxyNote });
       } catch (error) {
+        markUnavailable(options, 'fmp', error);
         errors.push(`FMP proxy: ${error.message}`);
       }
     }
 
-    try {
-      const fmpResult = await cachedRequest(
-        options.requestCache,
-        `fmp:${symbolMeta.sourceSymbol || symbolMeta.symbol}`,
-        () => fetchFmpQuote(symbolMeta, {
-          timeoutMs: options.timeoutMs,
-          apiKey: options.fmpApiKey,
-        }),
-      );
-      return cloneResultForSymbol(fmpResult, symbolMeta);
-    } catch (error) {
-      errors.push(`FMP: ${error.message}`);
+    if (!proxyMeta || !options.unavailableSources?.has('fmp')) {
+      try {
+        const fmpResult = await cachedRequest(
+          options.requestCache,
+          `fmp:${symbolMeta.sourceSymbol || symbolMeta.symbol}`,
+          () => fetchFmpQuote(symbolMeta, {
+            timeoutMs: options.timeoutMs,
+            apiKey: options.fmpApiKey,
+          }),
+        );
+        return cloneResultForSymbol(fmpResult, symbolMeta);
+      } catch (error) {
+        markUnavailable(options, 'fmp', error);
+        errors.push(`FMP: ${error.message}`);
+      }
     }
   } else {
-    errors.push('FMP: FMP_API_KEY is not configured');
+    errors.push(options.unavailableSources?.has('fmp') ? 'FMP: skipped after rate limit' : 'FMP: FMP_API_KEY is not configured');
   }
 
   if (options.finnhubApiKey) {
@@ -216,13 +231,31 @@ async function fetchWithFallback(symbolMeta, options) {
     errors.push('Finnhub: FINNHUB_API_KEY is not configured');
   }
 
-  const yahooResult = await cachedRequest(
-    options.requestCache,
-    `yahoo:${symbolMeta.sourceSymbol || symbolMeta.symbol}`,
-    () => fetchYahooQuote(symbolMeta, options),
-  );
-  if (!yahooResult.error) return yahooResult;
-  errors.push(`Yahoo: ${yahooResult.error}`);
+  try {
+    const stockAnalysisResult = await cachedRequest(
+      options.requestCache,
+      `stockanalysis:${symbolMeta.sourceSymbol || symbolMeta.symbol}`,
+      () => fetchStockAnalysisQuote(symbolMeta, options),
+    );
+    return cloneResultForSymbol(stockAnalysisResult, symbolMeta, {
+      proxyNote: stockAnalysisResult.proxyNote,
+    });
+  } catch (error) {
+    errors.push(`StockAnalysis: ${error.message}`);
+  }
+
+  if (!options.unavailableSources?.has('yahoo')) {
+    const yahooResult = await cachedRequest(
+      options.requestCache,
+      `yahoo:${symbolMeta.sourceSymbol || symbolMeta.symbol}`,
+      () => fetchYahooQuote(symbolMeta, options),
+    );
+    if (!yahooResult.error) return yahooResult;
+    markUnavailable(options, 'yahoo', yahooResult.error);
+    errors.push(`Yahoo: ${yahooResult.error}`);
+  } else {
+    errors.push('Yahoo: skipped after rate limit');
+  }
 
   return addError(symbolMeta, errors);
 }
@@ -232,6 +265,7 @@ export async function fetchMarketQuotes(symbols, options = {}) {
   const results = new Array(symbols.length);
   const requestCache = new Map();
   const persistentCache = await loadPersistentCache(options.cachePath);
+  const unavailableSources = new Set();
   let cacheDirty = false;
   let nextIndex = 0;
   let completed = 0;
@@ -245,6 +279,7 @@ export async function fetchMarketQuotes(symbols, options = {}) {
         ...options,
         requestCache,
         persistentCache,
+        unavailableSources,
       });
       if (cacheableResult(results[currentIndex])) {
         persistentCache.set(finalCacheKey(symbol), results[currentIndex]);

@@ -2,7 +2,7 @@
 
 中文《美股收盘日报》生成器。当前第一版已经实现 Node.js/Arcadia 可运行脚本：
 
-- 从 Yahoo Finance 图表接口抓取主要指数、核心 ETF、板块 ETF、主题 watchlist 和宏观资产。
+- 从 Financial Modeling Prep、Finnhub、StockAnalysis、Yahoo Finance、FRED 抓取主要指数、核心 ETF、板块 ETF、主题 watchlist 和宏观资产。
 - 计算日涨跌、近 5 日、近 1 月、MA20、MA50、RSI14 等基础指标。
 - 生成中文 Markdown 日报到 `reports/YYYYMMDD.md`。
 - 通过 Bark 推送简短运行摘要；`BARK` 缺失或推送失败不会导致主流程失败。
@@ -49,6 +49,8 @@ npm start
 - `NEWS_LIMIT`：可选，日报中展示的新闻事件数量，默认 8。
 - `FMP_API_KEY`：推荐配置。Arcadia 上 Yahoo Finance 可能返回 403/429，FMP 用作稳定行情源。
 - `FINNHUB_API_KEY`：可选配置。用于股票和 ETF 行情兜底，指数会尽量用 ETF 代理。
+
+行情源顺序：同日缓存/FRED -> FMP -> Finnhub -> StockAnalysis -> Yahoo Finance。FMP/Yahoo 遇到 429 后，本轮运行会自动跳过该源，避免继续消耗时间和额度。
 
 `reports/*.md` 默认不提交到 Git，避免把每天生成的日报混入源码历史。
 
