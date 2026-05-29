@@ -20,6 +20,21 @@ function requestViaProxy(url, { timeoutMs, headers }) {
   if (!proxy) return null;
 
   return new Promise((resolve, reject) => {
+    let settled = false;
+    const watchdog = setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        reject(new Error(`Request timed out after ${timeoutMs}ms`));
+      }
+    }, timeoutMs);
+
+    function settle(fn, value) {
+      if (settled) return;
+      settled = true;
+      clearTimeout(watchdog);
+      fn(value);
+    }
+
     const target = new URL(url);
     const proxyUrl = new URL(proxy);
     const isHttpsProxy = proxyUrl.protocol === 'https:';
@@ -41,7 +56,7 @@ function requestViaProxy(url, { timeoutMs, headers }) {
       connectRequest.on('connect', (response, socket) => {
         if (response.statusCode !== 200) {
           socket.destroy();
-          reject(new Error(`Proxy CONNECT failed: HTTP ${response.statusCode}`));
+          settle(reject, new Error(`Proxy CONNECT failed: HTTP ${response.statusCode}`));
           return;
         }
 
@@ -73,20 +88,20 @@ function requestViaProxy(url, { timeoutMs, headers }) {
           const statusLine = headerText.split('\r\n')[0] || '';
           const statusMatch = statusLine.match(/HTTP\/\d(?:\.\d)?\s+(\d+)/);
           const status = statusMatch ? Number(statusMatch[1]) : 0;
-          resolve({
+          settle(resolve, {
             ok: status >= 200 && status < 300,
             status,
             text: async () => body,
             json: async () => JSON.parse(body),
           });
         });
-        tlsSocket.on('error', reject);
+        tlsSocket.on('error', (error) => settle(reject, error));
       });
 
       connectRequest.on('timeout', () => {
         connectRequest.destroy(new Error(`Proxy CONNECT timed out after ${timeoutMs}ms`));
       });
-      connectRequest.on('error', reject);
+      connectRequest.on('error', (error) => settle(reject, error));
       connectRequest.end();
       return;
     }
@@ -104,7 +119,7 @@ function requestViaProxy(url, { timeoutMs, headers }) {
       response.on('data', (chunk) => chunks.push(chunk));
       response.on('end', () => {
         const body = Buffer.concat(chunks).toString('utf8');
-        resolve({
+        settle(resolve, {
           ok: response.statusCode >= 200 && response.statusCode < 300,
           status: response.statusCode,
           text: async () => body,
@@ -116,7 +131,7 @@ function requestViaProxy(url, { timeoutMs, headers }) {
     request.on('timeout', () => {
       request.destroy(new Error(`Request timed out after ${timeoutMs}ms`));
     });
-    request.on('error', reject);
+    request.on('error', (error) => settle(reject, error));
     request.end();
   });
 }

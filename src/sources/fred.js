@@ -10,6 +10,12 @@ const FRED_SERIES = {
   TLT: { id: 'DGS30', note: '用FRED 30年期国债收益率反向代理TLT' },
 };
 
+function offsetDate(daysAgo) {
+  const date = new Date();
+  date.setUTCDate(date.getUTCDate() - daysAgo);
+  return date.toISOString().slice(0, 10);
+}
+
 function parseFredCsv(csv, seriesId) {
   return String(csv || '')
     .trim()
@@ -43,7 +49,7 @@ export async function fetchFredQuote(symbolMeta, { timeoutMs }) {
     throw new Error('Symbol is not supported by FRED fallback');
   }
 
-  const url = `https://fred.stlouisfed.org/graph/fredgraph.csv?id=${encodeURIComponent(series.id)}`;
+  const url = `https://fred.stlouisfed.org/graph/fredgraph.csv?id=${encodeURIComponent(series.id)}&cosd=${offsetDate(370)}`;
   const csv = await fetchText(url, { timeoutMs });
   const points = parseFredCsv(csv, series.id).slice(-90);
   if (points.length < 2) {
