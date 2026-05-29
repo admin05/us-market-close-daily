@@ -75,16 +75,19 @@ async function main() {
     return;
   }
 
-  await sendBark({
+  console.log('[market-close] Sending Bark notification...');
+  const barkResult = await sendBark({
     title: config.scriptName,
     body: summary,
     bark: config.bark,
-    timeoutMs: config.httpTimeoutMs,
+    timeoutMs: config.barkTimeoutMs,
   });
+  console.log(`[market-close] Bark notification ${barkResult.ok ? 'sent' : `skipped/failed: ${barkResult.reason || 'unknown'}`}`);
 }
 
 main()
   .then(() => {
+    console.log('[market-close] Process exiting with code 0.');
     process.exit(0);
   })
   .catch(async (error) => {
@@ -94,7 +97,8 @@ main()
       title: config.scriptName,
       body: `状态：失败\n错误：${error.message}`,
       bark: config.bark,
-      timeoutMs: config.httpTimeoutMs,
+      timeoutMs: config.barkTimeoutMs,
     });
+    console.log('[market-close] Process exiting with code 1.');
     process.exit(1);
   });

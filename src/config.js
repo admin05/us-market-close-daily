@@ -21,6 +21,7 @@ export function loadConfig() {
     reportsDir: resolve(process.env.REPORTS_DIR || 'reports'),
     dataDir: resolve(process.env.DATA_DIR || 'data'),
     httpTimeoutMs: readNumberEnv('HTTP_TIMEOUT_MS', 15000),
+    barkTimeoutMs: readNumberEnv('BARK_TIMEOUT_MS', 8000),
     marketDataConcurrency: Math.max(1, Math.floor(readNumberEnv('MARKET_DATA_CONCURRENCY', 6))),
     finnhubApiKey: process.env.FINNHUB_API_KEY || '',
     fmpApiKey: process.env.FMP_API_KEY || '',
