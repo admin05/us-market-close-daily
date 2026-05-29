@@ -23,6 +23,20 @@ async function main() {
   const symbols = listAllSymbols();
 
   console.log(`[market-close] Fetching ${symbols.length} symbols for ${reportDate}...`);
+  const newsPromise = config.skipNews
+    ? Promise.resolve({
+      ok: false,
+      source: '新闻雷达',
+      sourceUrl: config.newsSourceUrl,
+      events: [],
+      error: 'SKIP_NEWS=1',
+    })
+    : fetchNewsRadarEvents({
+      sourceUrl: config.newsSourceUrl,
+      limit: config.newsLimit,
+      timeoutMs: config.httpTimeoutMs,
+    });
+
   const [results, news] = await Promise.all([
     fetchMarketQuotes(symbols, {
       timeoutMs: config.httpTimeoutMs,
@@ -36,11 +50,7 @@ async function main() {
         console.log(`[market-close] Market data ${completed}/${total}: ${symbol} ${status}`);
       },
     }),
-    fetchNewsRadarEvents({
-      sourceUrl: config.newsSourceUrl,
-      limit: config.newsLimit,
-      timeoutMs: config.httpTimeoutMs,
-    }),
+    newsPromise,
   ]);
 
   if (news.events?.length) {
