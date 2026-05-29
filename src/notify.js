@@ -11,6 +11,19 @@ function normalizeBarkEndpoint(rawValue) {
   return `https://api.day.app/${encodeURIComponent(value)}`;
 }
 
+async function withTimeout(promise, timeoutMs) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`Bark push timed out after ${timeoutMs}ms`)), timeoutMs);
+  });
+
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function sendBark({ title, body, group = DEFAULT_BARK_GROUP, bark, timeoutMs = 15000 }) {
   const endpoint = normalizeBarkEndpoint(bark ?? process.env.BARK);
   if (!endpoint) {
@@ -22,7 +35,7 @@ export async function sendBark({ title, body, group = DEFAULT_BARK_GROUP, bark, 
   url.searchParams.set('group', group);
 
   try {
-    await fetchText(url, { timeoutMs });
+    await withTimeout(fetchText(url, { timeoutMs }), timeoutMs + 1000);
     return { ok: true, skipped: false };
   } catch (error) {
     console.warn(`[notify] Bark push failed: ${error.message}`);

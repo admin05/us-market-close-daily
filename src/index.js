@@ -83,14 +83,18 @@ async function main() {
   });
 }
 
-main().catch(async (error) => {
-  console.error(`[market-close] Failed: ${error.stack || error.message}`);
-  const config = loadConfig();
-  await sendBark({
-    title: config.scriptName,
-    body: `状态：失败\n错误：${error.message}`,
-    bark: config.bark,
-    timeoutMs: config.httpTimeoutMs,
+main()
+  .then(() => {
+    process.exit(0);
+  })
+  .catch(async (error) => {
+    console.error(`[market-close] Failed: ${error.stack || error.message}`);
+    const config = loadConfig();
+    await sendBark({
+      title: config.scriptName,
+      body: `状态：失败\n错误：${error.message}`,
+      bark: config.bark,
+      timeoutMs: config.httpTimeoutMs,
+    });
+    process.exit(1);
   });
-  process.exitCode = 1;
-});

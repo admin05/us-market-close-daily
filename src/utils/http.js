@@ -21,8 +21,10 @@ function requestViaProxy(url, { timeoutMs, headers }) {
 
   return new Promise((resolve, reject) => {
     let settled = false;
+    const sockets = new Set();
     const watchdog = setTimeout(() => {
       if (!settled) {
+        for (const socket of sockets) socket.destroy();
         settled = true;
         reject(new Error(`Request timed out after ${timeoutMs}ms`));
       }
@@ -32,6 +34,7 @@ function requestViaProxy(url, { timeoutMs, headers }) {
       if (settled) return;
       settled = true;
       clearTimeout(watchdog);
+      for (const socket of sockets) socket.destroy();
       fn(value);
     }
 
@@ -54,6 +57,7 @@ function requestViaProxy(url, { timeoutMs, headers }) {
       });
 
       connectRequest.on('connect', (response, socket) => {
+        sockets.add(socket);
         if (response.statusCode !== 200) {
           socket.destroy();
           settle(reject, new Error(`Proxy CONNECT failed: HTTP ${response.statusCode}`));
@@ -64,6 +68,7 @@ function requestViaProxy(url, { timeoutMs, headers }) {
           socket,
           servername: target.hostname,
         }, () => {
+          sockets.add(tlsSocket);
           const path = `${target.pathname}${target.search}`;
           const headerLines = [
             `GET ${path || '/'} HTTP/1.1`,
@@ -94,7 +99,6 @@ function requestViaProxy(url, { timeoutMs, headers }) {
             text: async () => body,
             json: async () => JSON.parse(body),
           });
-          tlsSocket.destroy();
         });
         tlsSocket.on('error', (error) => settle(reject, error));
       });
@@ -116,6 +120,7 @@ function requestViaProxy(url, { timeoutMs, headers }) {
       headers,
       timeout: timeoutMs,
     }, (response) => {
+      sockets.add(response.socket);
       const chunks = [];
       response.on('data', (chunk) => chunks.push(chunk));
       response.on('end', () => {
@@ -126,7 +131,6 @@ function requestViaProxy(url, { timeoutMs, headers }) {
           text: async () => body,
           json: async () => JSON.parse(body),
         });
-        response.destroy();
       });
     });
 
