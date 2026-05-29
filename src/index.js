@@ -5,6 +5,7 @@ import { loadConfig } from './config.js';
 import { listAllSymbols } from './watchlists.js';
 import { fetchMarketQuotes } from './sources/market-data.js';
 import { fetchCompanyNews } from './sources/company-news.js';
+import { fetchEarningsCalendar } from './sources/earnings-calendar.js';
 import { fetchNewsRadarEvents } from './sources/news-radar.js';
 import { buildBarkSummary, buildMarkdownReport } from './report/build-report.js';
 import { sendBark } from './notify.js';
@@ -51,8 +52,13 @@ async function main() {
       perSymbolLimit: config.companyNewsPerSymbol,
       timeoutMs: config.httpTimeoutMs,
     });
+  const earningsPromise = fetchEarningsCalendar({
+    reportDate,
+    limit: config.earningsLimit,
+    timeoutMs: config.httpTimeoutMs,
+  });
 
-  const [results, news, companyNews] = await Promise.all([
+  const [results, news, companyNews, earnings] = await Promise.all([
     fetchMarketQuotes(symbols, {
       timeoutMs: config.httpTimeoutMs,
       concurrency: config.marketDataConcurrency,
@@ -68,6 +74,7 @@ async function main() {
     }),
     newsPromise,
     companyNewsPromise,
+    earningsPromise,
   ]);
 
   if (news.events?.length) {
@@ -80,13 +87,18 @@ async function main() {
   } else {
     console.log(`[market-close] Company news missing: ${companyNews.error || 'no events'}`);
   }
+  if (earnings.highlights?.length) {
+    console.log(`[market-close] Earnings events ${earnings.highlights.length}/${config.earningsLimit}: ${earnings.source}`);
+  } else {
+    console.log(`[market-close] Earnings events missing: ${earnings.error || 'no events'}`);
+  }
 
   await mkdir(config.reportsDir, { recursive: true });
-  const markdown = buildMarkdownReport({ reportDate, results, news, companyNews });
+  const markdown = buildMarkdownReport({ reportDate, results, news, companyNews, earnings });
   const reportPath = join(config.reportsDir, `${compactDate(reportDate)}.md`);
   await writeFile(reportPath, markdown, 'utf8');
 
-  const summary = buildBarkSummary({ reportDate, results, reportPath, news, companyNews });
+  const summary = buildBarkSummary({ reportDate, results, reportPath, news, companyNews, earnings });
   console.log(`[market-close] Report saved: ${reportPath}`);
   console.log(summary);
 

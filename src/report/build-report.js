@@ -356,11 +356,48 @@ function buildCompanyNewsSection(companyNews) {
   return lines.join('\n');
 }
 
-function buildMissingData(results, news, companyNews) {
+function buildEarningsSection(earnings) {
+  const sourceName = earnings?.source || '财报日历源';
+  const sourceUrl = earnings?.sourceUrl || '#';
+
+  if (!earnings?.highlights?.length) {
+    const reason = earnings?.error ? `抓取失败：${earnings.error}` : '暂无可解析财报事件';
+    return [
+      '## 财报与重点事件',
+      '',
+      `暂无可靠数据。${reason}。来源：[${sourceName}](${sourceUrl})`,
+    ].join('\n');
+  }
+
+  const watched = earnings.highlights.filter((event) =>
+    ['NVDA', 'AMD', 'AVGO', 'TSM', 'MSFT', 'GOOGL', 'META', 'AMZN', 'TSLA', 'PLTR', 'VRT', 'CEG'].includes(event.symbol),
+  );
+  const nextDate = earnings.nextDate || '下一交易日';
+
+  const lines = [
+    '## 财报与重点事件',
+    '',
+    `来源：[${sourceName}](${sourceUrl})。覆盖 ${earnings.reportDate} 与 ${nextDate} 的 Nasdaq 财报日历；优先展示 Watchlist 相关公司，其余按市值筛选。`,
+    '',
+    `- 今日财报数量：${earnings.today?.length ?? 0}；下一交易日财报数量：${earnings.next?.length ?? 0}。`,
+    `- Watchlist 命中：${watched.length ? watched.map((event) => `${event.symbol}(${event.date} ${event.time})`).join('、') : '暂无可靠数据'}。`,
+    '',
+    '| 日期 | 代码 | 公司 | 时间 | EPS预期 | 财季 | 市值 |',
+    '|---|---:|---|---|---:|---|---:|',
+  ];
+
+  for (const event of earnings.highlights) {
+    lines.push(`| ${event.date} | ${event.symbol} | ${event.name} | ${event.time} | ${event.epsForecast || '暂无可靠数据'} | ${event.fiscalQuarterEnding || '暂无可靠数据'} | ${event.marketCap || '暂无可靠数据'} |`);
+  }
+
+  return lines.join('\n');
+}
+
+function buildMissingData(results, news, companyNews, earnings) {
   const failed = results.filter((item) => item.error);
   const proxied = results.filter((item) => item.proxyNote && !item.error);
   const quoteOnly = results.filter((item) => item.quoteOnly && !item.error);
-  if (!failed.length && news?.events?.length && companyNews?.events?.length) {
+  if (!failed.length && news?.events?.length && companyNews?.events?.length && earnings?.highlights?.length) {
     const proxyLine = proxied.length
       ? `\n\n代理数据：${proxied.map((item) => `${item.name}(${item.proxyNote})`).join('；')}。`
       : '';
@@ -391,6 +428,11 @@ function buildMissingData(results, news, companyNews) {
     lines.push(`- 重点公司新闻：${companyNews?.error || '暂无可解析公司新闻'}。来源：[${companyNews?.source || '公司新闻源'}](${companyNews?.sourceUrl || '#'})`);
   }
 
+  if (!earnings?.highlights?.length) {
+    if (failed.length || !news?.events?.length || !companyNews?.events?.length) lines.push('');
+    lines.push(`- 财报日历：${earnings?.error || '暂无可解析财报事件'}。来源：[${earnings?.source || '财报日历源'}](${earnings?.sourceUrl || '#'})`);
+  }
+
   if (proxied.length) {
     if (failed.length || !news?.events?.length) lines.push('');
     lines.push(`代理数据：${proxied.map((item) => `${item.name}(${item.proxyNote})`).join('；')}。`);
@@ -404,7 +446,7 @@ function buildMissingData(results, news, companyNews) {
   return lines.join('\n');
 }
 
-export function buildMarkdownReport({ reportDate, results, news, companyNews }) {
+export function buildMarkdownReport({ reportDate, results, news, companyNews, earnings }) {
   const sections = [
     `# 美股收盘日报 ${reportDate}`,
     '',
@@ -424,20 +466,23 @@ export function buildMarkdownReport({ reportDate, results, news, companyNews }) 
     '',
     buildCompanyNewsSection(companyNews),
     '',
+    buildEarningsSection(earnings),
+    '',
     buildWatchPlan(results, news),
     '',
-    buildMissingData(results, news, companyNews),
+    buildMissingData(results, news, companyNews, earnings),
     '',
   ];
 
   return sections.join('\n');
 }
 
-export function buildBarkSummary({ reportDate, results, reportPath, news, companyNews }) {
+export function buildBarkSummary({ reportDate, results, reportPath, news, companyNews, earnings }) {
   const reliable = sortedReliable(results);
   const failedCount = results.filter((item) => item.error).length;
   const newsCount = news?.events?.length || 0;
   const companyNewsCount = companyNews?.events?.length || 0;
+  const earningsCount = earnings?.highlights?.length || 0;
   const top = reliable.slice(0, 2).map((item) => `${item.name}${fmt(item.technical.changePct, '%')}`).join('，') || '暂无可靠数据';
   const bottom = reliable.slice(-2).reverse().map((item) => `${item.name}${fmt(item.technical.changePct, '%')}`).join('，') || '暂无可靠数据';
 
@@ -448,6 +493,7 @@ export function buildBarkSummary({ reportDate, results, reportPath, news, compan
     `承压：${bottom}`,
     `新闻：${newsCount}条`,
     `公司新闻：${companyNewsCount}条`,
+    `财报：${earningsCount}项`,
     `缺失：${failedCount}项`,
     `报告：${reportPath}`,
   ].join('\n');

@@ -26,3 +26,17 @@ export function formatDateTime(date = new Date(), timeZone = 'Asia/Shanghai') {
 export function compactDate(dateText) {
   return String(dateText).replaceAll('-', '');
 }
+
+export function addDays(dateText, days) {
+  const date = new Date(`${dateText}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+export function nextBusinessDate(dateText) {
+  let next = addDays(dateText, 1);
+  while ([0, 6].includes(new Date(`${next}T00:00:00Z`).getUTCDay())) {
+    next = addDays(next, 1);
+  }
+  return next;
+}
