@@ -94,6 +94,7 @@ function requestViaProxy(url, { timeoutMs, headers }) {
             text: async () => body,
             json: async () => JSON.parse(body),
           });
+          tlsSocket.destroy();
         });
         tlsSocket.on('error', (error) => settle(reject, error));
       });
@@ -125,6 +126,7 @@ function requestViaProxy(url, { timeoutMs, headers }) {
           text: async () => body,
           json: async () => JSON.parse(body),
         });
+        response.destroy();
       });
     });
 

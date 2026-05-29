@@ -79,6 +79,7 @@ async function main() {
     title: config.scriptName,
     body: summary,
     bark: config.bark,
+    timeoutMs: config.httpTimeoutMs,
   });
 }
 
@@ -89,6 +90,7 @@ main().catch(async (error) => {
     title: config.scriptName,
     body: `状态：失败\n错误：${error.message}`,
     bark: config.bark,
+    timeoutMs: config.httpTimeoutMs,
   });
   process.exitCode = 1;
 });
