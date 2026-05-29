@@ -1,3 +1,6 @@
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { dirname } from 'node:path';
+
 import { fetchFinnhubQuote } from './finnhub.js';
 import { fetchFmpQuote } from './fmp.js';
 import { fetchFredQuote } from './fred.js';
@@ -67,13 +70,74 @@ function addError(symbolMeta, errors) {
   };
 }
 
+function cloneResultForSymbol(baseResult, symbolMeta, overrides = {}) {
+  return {
+    ...baseResult,
+    ...symbolMeta,
+    source: baseResult.source,
+    sourceUrl: baseResult.sourceUrl,
+    points: baseResult.points,
+    technical: baseResult.technical,
+    quoteOnly: baseResult.quoteOnly,
+    proxyNote: overrides.proxyNote ?? baseResult.proxyNote,
+    error: baseResult.error ?? null,
+  };
+}
+
+function cacheableResult(result) {
+  return result && !result.error && result.technical;
+}
+
+async function cachedRequest(cache, key, fetcher) {
+  if (cache.has(key)) return cache.get(key);
+  const promise = fetcher();
+  cache.set(key, promise);
+  try {
+    const result = await promise;
+    cache.set(key, Promise.resolve(result));
+    return result;
+  } catch (error) {
+    cache.delete(key);
+    throw error;
+  }
+}
+
+async function loadPersistentCache(cachePath) {
+  if (!cachePath) return new Map();
+  try {
+    const raw = await readFile(cachePath, 'utf8');
+    const parsed = JSON.parse(raw);
+    return new Map(Object.entries(parsed));
+  } catch {
+    return new Map();
+  }
+}
+
+async function savePersistentCache(cachePath, persistentCache) {
+  if (!cachePath) return;
+  await mkdir(dirname(cachePath), { recursive: true });
+  await writeFile(cachePath, JSON.stringify(Object.fromEntries(persistentCache), null, 2), 'utf8');
+}
+
+function finalCacheKey(symbolMeta) {
+  return `final:${symbolMeta.symbol}`;
+}
+
 async function fetchWithFallback(symbolMeta, options) {
   const errors = [];
+  const persistentCache = options.persistentCache;
+  const cachedFinal = persistentCache?.get(finalCacheKey(symbolMeta));
+  if (cachedFinal) {
+    return { ...cachedFinal, cacheHit: true };
+  }
 
   try {
-    return await fetchFredQuote(symbolMeta, {
-      timeoutMs: options.timeoutMs,
-    });
+    const fredResult = await cachedRequest(
+      options.requestCache,
+      `fred:${symbolMeta.symbol}`,
+      () => fetchFredQuote(symbolMeta, { timeoutMs: options.timeoutMs }),
+    );
+    return cloneResultForSymbol(fredResult, symbolMeta, { proxyNote: fredResult.proxyNote });
   } catch (error) {
     if (!String(error.message || '').includes('not supported')) {
       errors.push(`FRED: ${error.message}`);
@@ -84,29 +148,30 @@ async function fetchWithFallback(symbolMeta, options) {
     const proxyMeta = withFmpDirectProxy(symbolMeta);
     if (proxyMeta) {
       try {
-        const proxyResult = await fetchFmpQuote(proxyMeta, {
-          timeoutMs: options.timeoutMs,
-          apiKey: options.fmpApiKey,
-        });
-        return {
-          ...proxyResult,
-          symbol: symbolMeta.symbol,
-          name: symbolMeta.name,
-          type: symbolMeta.type,
-          groupId: symbolMeta.groupId,
-          groupTitle: symbolMeta.groupTitle,
-          proxyNote: proxyMeta.proxyNote,
-        };
+        const proxyResult = await cachedRequest(
+          options.requestCache,
+          `fmp:${proxyMeta.sourceSymbol || proxyMeta.symbol}`,
+          () => fetchFmpQuote(proxyMeta, {
+            timeoutMs: options.timeoutMs,
+            apiKey: options.fmpApiKey,
+          }),
+        );
+        return cloneResultForSymbol(proxyResult, symbolMeta, { proxyNote: proxyMeta.proxyNote });
       } catch (error) {
         errors.push(`FMP proxy: ${error.message}`);
       }
     }
 
     try {
-      return await fetchFmpQuote(symbolMeta, {
-        timeoutMs: options.timeoutMs,
-        apiKey: options.fmpApiKey,
-      });
+      const fmpResult = await cachedRequest(
+        options.requestCache,
+        `fmp:${symbolMeta.sourceSymbol || symbolMeta.symbol}`,
+        () => fetchFmpQuote(symbolMeta, {
+          timeoutMs: options.timeoutMs,
+          apiKey: options.fmpApiKey,
+        }),
+      );
+      return cloneResultForSymbol(fmpResult, symbolMeta);
     } catch (error) {
       errors.push(`FMP: ${error.message}`);
     }
@@ -116,10 +181,15 @@ async function fetchWithFallback(symbolMeta, options) {
 
   if (options.finnhubApiKey) {
     try {
-      return await fetchFinnhubQuote(symbolMeta, {
-        timeoutMs: options.timeoutMs,
-        apiKey: options.finnhubApiKey,
-      });
+      const finnhubResult = await cachedRequest(
+        options.requestCache,
+        `finnhub:${symbolMeta.sourceSymbol || symbolMeta.symbol}`,
+        () => fetchFinnhubQuote(symbolMeta, {
+          timeoutMs: options.timeoutMs,
+          apiKey: options.finnhubApiKey,
+        }),
+      );
+      return cloneResultForSymbol(finnhubResult, symbolMeta);
     } catch (error) {
       errors.push(`Finnhub: ${error.message}`);
     }
@@ -127,19 +197,17 @@ async function fetchWithFallback(symbolMeta, options) {
     const proxyMeta = withProxy(symbolMeta);
     if (proxyMeta) {
       try {
-        const proxyResult = await fetchFinnhubQuote(proxyMeta, {
-          timeoutMs: options.timeoutMs,
-          apiKey: options.finnhubApiKey,
-        });
-        return {
-          ...proxyResult,
-          symbol: symbolMeta.symbol,
-          name: symbolMeta.name,
-          type: symbolMeta.type,
-          source: 'Finnhub',
-          sourceUrl: `https://finnhub.io/api/v1/stock/candle?symbol=${encodeURIComponent(proxyMeta.sourceSymbol)}`,
+        const proxyResult = await cachedRequest(
+          options.requestCache,
+          `finnhub:${proxyMeta.sourceSymbol || proxyMeta.symbol}`,
+          () => fetchFinnhubQuote(proxyMeta, {
+            timeoutMs: options.timeoutMs,
+            apiKey: options.finnhubApiKey,
+          }),
+        );
+        return cloneResultForSymbol(proxyResult, symbolMeta, {
           proxyNote: proxyMeta.proxyNote,
-        };
+        });
       } catch (error) {
         errors.push(`Finnhub proxy: ${error.message}`);
       }
@@ -148,7 +216,11 @@ async function fetchWithFallback(symbolMeta, options) {
     errors.push('Finnhub: FINNHUB_API_KEY is not configured');
   }
 
-  const yahooResult = await fetchYahooQuote(symbolMeta, options);
+  const yahooResult = await cachedRequest(
+    options.requestCache,
+    `yahoo:${symbolMeta.sourceSymbol || symbolMeta.symbol}`,
+    () => fetchYahooQuote(symbolMeta, options),
+  );
   if (!yahooResult.error) return yahooResult;
   errors.push(`Yahoo: ${yahooResult.error}`);
 
@@ -158,6 +230,9 @@ async function fetchWithFallback(symbolMeta, options) {
 export async function fetchMarketQuotes(symbols, options = {}) {
   const concurrency = Math.max(1, Math.floor(options.concurrency || 6));
   const results = new Array(symbols.length);
+  const requestCache = new Map();
+  const persistentCache = await loadPersistentCache(options.cachePath);
+  let cacheDirty = false;
   let nextIndex = 0;
   let completed = 0;
 
@@ -166,16 +241,25 @@ export async function fetchMarketQuotes(symbols, options = {}) {
       const currentIndex = nextIndex;
       nextIndex += 1;
       const symbol = symbols[currentIndex];
-      results[currentIndex] = await fetchWithFallback(symbol, options);
+      results[currentIndex] = await fetchWithFallback(symbol, {
+        ...options,
+        requestCache,
+        persistentCache,
+      });
+      if (cacheableResult(results[currentIndex])) {
+        persistentCache.set(finalCacheKey(symbol), results[currentIndex]);
+        cacheDirty = true;
+      }
       completed += 1;
 
       if (options.onProgress) {
+        const cache = results[currentIndex].cacheHit ? ' cache' : '';
         options.onProgress({
           completed,
           total: symbols.length,
           symbol: symbol.symbol,
           ok: !results[currentIndex].error,
-          source: results[currentIndex].source,
+          source: results[currentIndex].source ? `${results[currentIndex].source}${cache}` : results[currentIndex].source,
           proxyNote: results[currentIndex].proxyNote,
           error: results[currentIndex].error,
         });
@@ -185,5 +269,8 @@ export async function fetchMarketQuotes(symbols, options = {}) {
 
   const workers = Array.from({ length: Math.min(concurrency, symbols.length) }, () => worker());
   await Promise.all(workers);
+  if (cacheDirty) {
+    await savePersistentCache(options.cachePath, persistentCache);
+  }
   return results;
 }

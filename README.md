@@ -44,6 +44,7 @@ npm start
 - `REPORT_DATE`：可选，覆盖报告日期，格式 `YYYY-MM-DD`。
 - `HTTP_TIMEOUT_MS`：可选，行情请求超时时间。
 - `REPORTS_DIR`：可选，日报输出目录，默认 `reports`。
+- `DATA_DIR`：可选，行情缓存目录，默认 `data`。同一天重复运行会复用已成功抓到的行情，节省 API calls。
 - `NEWS_SOURCE_URL`：可选，新闻雷达事件源，默认 `https://stocks.matraceai.com/`；如只想看海外事件，可设为 `https://stocks.matraceai.com/?type=overseas`。
 - `NEWS_LIMIT`：可选，日报中展示的新闻事件数量，默认 8。
 - `FMP_API_KEY`：推荐配置。Arcadia 上 Yahoo Finance 可能返回 403/429，FMP 用作稳定行情源。

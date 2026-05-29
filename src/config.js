@@ -19,6 +19,7 @@ export function loadConfig() {
     scriptName: '美股收盘日报',
     reportDate: normalizeDate(process.env.REPORT_DATE),
     reportsDir: resolve(process.env.REPORTS_DIR || 'reports'),
+    dataDir: resolve(process.env.DATA_DIR || 'data'),
     httpTimeoutMs: readNumberEnv('HTTP_TIMEOUT_MS', 15000),
     marketDataConcurrency: Math.max(1, Math.floor(readNumberEnv('MARKET_DATA_CONCURRENCY', 6))),
     finnhubApiKey: process.env.FINNHUB_API_KEY || '',

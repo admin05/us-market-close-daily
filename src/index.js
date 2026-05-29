@@ -23,6 +23,7 @@ async function main() {
   const symbols = listAllSymbols();
 
   console.log(`[market-close] Fetching ${symbols.length} symbols for ${reportDate}...`);
+  await mkdir(config.dataDir, { recursive: true });
   const newsPromise = config.skipNews
     ? Promise.resolve({
       ok: false,
@@ -43,6 +44,7 @@ async function main() {
       concurrency: config.marketDataConcurrency,
       finnhubApiKey: config.finnhubApiKey,
       fmpApiKey: config.fmpApiKey,
+      cachePath: join(config.dataDir, `market-cache-${compactDate(reportDate)}.json`),
       onProgress: ({ completed, total, symbol, ok, source, proxyNote, error }) => {
         const via = source ? ` via ${source}` : '';
         const proxy = proxyNote ? ` (${proxyNote})` : '';
