@@ -43,6 +43,12 @@ async function main() {
     }),
   ]);
 
+  if (news.events?.length) {
+    console.log(`[market-close] News events ${news.events.length}/${config.newsLimit}: ${news.source}`);
+  } else {
+    console.log(`[market-close] News events missing: ${news.error || 'no events'}`);
+  }
+
   await mkdir(config.reportsDir, { recursive: true });
   const markdown = buildMarkdownReport({ reportDate, results, news });
   const reportPath = join(config.reportsDir, `${compactDate(reportDate)}.md`);

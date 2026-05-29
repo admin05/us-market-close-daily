@@ -229,10 +229,15 @@ function tableRows(items) {
       const trend = [
         t.aboveMa20 === null ? 'MA20暂无可靠数据' : t.aboveMa20 ? '站上MA20' : '跌破MA20',
         t.aboveMa50 === null ? 'MA50暂无可靠数据' : t.aboveMa50 ? '站上MA50' : '跌破MA50',
-      ].join(' / ');
+        Number.isFinite(t.rsi14) ? `RSI ${fmtPlain(t.rsi14)}` : null,
+      ].filter(Boolean).join(' / ');
 
-      const sourceLabel = item.proxyNote ? `${item.source}（${item.proxyNote}）` : item.source;
-      return `| ${item.name} | ${item.symbol} | ${fmtPlain(t.close)} | ${fmt(t.changePct, '%')} | ${fmt(t.fiveDayPct, '%')} | ${trend} / RSI ${fmtPlain(t.rsi14)} | [${sourceLabel}](${item.sourceUrl}) |`;
+      const sourceNotes = [
+        item.proxyNote,
+        item.quoteOnly ? '仅快照，无均线/RSI' : null,
+      ].filter(Boolean);
+      const sourceLabel = sourceNotes.length ? `${item.source}（${sourceNotes.join('；')}）` : item.source;
+      return `| ${item.name} | ${item.symbol} | ${fmtPlain(t.close)} | ${fmt(t.changePct, '%')} | ${fmt(t.fiveDayPct, '%')} | ${trend} | [${sourceLabel}](${item.sourceUrl}) |`;
     })
     .join('\n');
 }
@@ -325,11 +330,15 @@ function buildNewsSection(news) {
 function buildMissingData(results, news) {
   const failed = results.filter((item) => item.error);
   const proxied = results.filter((item) => item.proxyNote && !item.error);
+  const quoteOnly = results.filter((item) => item.quoteOnly && !item.error);
   if (!failed.length && news?.events?.length) {
     const proxyLine = proxied.length
       ? `\n\n代理数据：${proxied.map((item) => `${item.name}(${item.proxyNote})`).join('；')}。`
       : '';
-    return `## 数据质量\n\n所有第一版行情项均返回了可解析数据。${proxyLine}`;
+    const quoteLine = quoteOnly.length
+      ? `\n\n快照数据：${quoteOnly.map((item) => `${item.name}(${item.symbol})`).join('；')}，仅用于当日涨跌，不计算均线/RSI。`
+      : '';
+    return `## 数据质量\n\n所有第一版行情项均返回了可解析数据。${proxyLine}${quoteLine}`;
   }
 
   const lines = [
@@ -351,6 +360,11 @@ function buildMissingData(results, news) {
   if (proxied.length) {
     if (failed.length || !news?.events?.length) lines.push('');
     lines.push(`代理数据：${proxied.map((item) => `${item.name}(${item.proxyNote})`).join('；')}。`);
+  }
+
+  if (quoteOnly.length) {
+    if (failed.length || !news?.events?.length || proxied.length) lines.push('');
+    lines.push(`快照数据：${quoteOnly.map((item) => `${item.name}(${item.symbol})`).join('；')}，仅用于当日涨跌，不计算均线/RSI。`);
   }
 
   return lines.join('\n');
